@@ -1,0 +1,91 @@
+---
+name: Build add-on (dev)
+
+# Builds the add-on image for one or more architectures and pushes it to
+# ghcr.io/<repository owner>/timescaledb/<arch>:<tag>, using the dependency
+# images from ghcr.io/<repository owner>/timescaledb/dependency.
+# Intended for testing forks/branches on a Home Assistant machine before a release.
+
+# yamllint disable-line rule:truthy
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to publish"
+        required: true
+        default: "dev"
+        type: string
+      archs:
+        description: "Comma separated list of add-on architectures (amd64,aarch64)"
+        required: true
+        default: "amd64"
+        type: string
+
+jobs:
+  matrix:
+    name: Prepare build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.set.outputs.build }}
+    steps:
+      - name: Compose matrix
+        id: set
+        env:
+          ARCHS: ${{ inputs.archs }}
+        run: |
+          archs='{"amd64":   {"platform": "linux/amd64", "runner": "ubuntu-latest"},
+                  "aarch64": {"platform": "linux/arm64", "runner": "ubuntu-24.04-arm"}}'
+          build=$(echo "${archs}" | jq -c --arg a "${ARCHS}" \
+            '. as $m | [ ($a | split(",") | map(gsub(" "; "")) | .[]) as $arch | {arch: $arch} + $m[$arch] ]')
+          echo "build={\"include\": ${build}}" >> "${GITHUB_OUTPUT}"
+          echo "${build}" | jq .
+
+  build:
+    name: Build ${{ matrix.arch }}
+    needs: matrix
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix.outputs.build) }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Determine base image
+        id: base
+        run: |
+          build_from=$(yq -r ".build_from.${{ matrix.arch }}" timescaledb/build.yaml)
+          echo "build_from=${build_from}" >> "${GITHUB_OUTPUT}"
+          echo "Base image: ${build_from}"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: timescaledb
+          file: timescaledb/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/timescaledb/${{ matrix.arch }}:${{ inputs.tag }}
+          build-args: |
+            BUILD_FROM=${{ steps.base.outputs.build_from }}
+            BUILD_ARCH=${{ matrix.arch }}
+            BUILD_VERSION=${{ inputs.tag }}
+            BUILD_DATE=${{ github.event.repository.updated_at }}
+            BUILD_REF=${{ github.sha }}
+            DEPENDENCY_REGISTRY=ghcr.io/${{ github.repository_owner }}/timescaledb/dependency
+          cache-from: type=gha,scope=addon-${{ matrix.arch }}
+          cache-to: type=gha,scope=addon-${{ matrix.arch }},mode=max
