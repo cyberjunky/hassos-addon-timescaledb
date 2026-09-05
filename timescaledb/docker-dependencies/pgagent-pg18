@@ -32,7 +32,8 @@ RUN --mount=type=cache,id=apk-${TARGETARCH}-${TARGETVARIANT},sharing=locked,targ
     && cd /build/pgagent \
     && git checkout ${VERSION} \
     && git apply -v ../pgagent.patch \
-    && cmake . \
+    # pgAgent 4.2.3 still declares a cmake minimum < 3.5, which CMake 4 refuses without this policy
+    && cmake -DCMAKE_POLICY_VERSION_MINIMUM=3.5 . \
     && make && make install \
     && cd ~ \
     && apk del .fetch-deps .build-deps \
