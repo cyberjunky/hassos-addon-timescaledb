@@ -11,6 +11,14 @@ on:
       - synchronize
   workflow_dispatch:
 
+# The called workflow requests these permissions; with the repository default
+# of a read-only GITHUB_TOKEN the run otherwise fails at startup without jobs.
+permissions:
+  actions: read
+  contents: read
+  packages: read
+  security-events: write
+
 jobs:
   workflows:
     uses: hassio-addons/workflows/.github/workflows/addon-ci.yaml@main
