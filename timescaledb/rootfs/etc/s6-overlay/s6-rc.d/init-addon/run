@@ -12,10 +12,16 @@ declare RESTORE_MODE
 
 POSTGRES_DATA=/data/postgres
 VERSION_FILE=/data/version
-BACKUP_FILE=/data/backup_db.sql
+BACKUP_FILE=/data/backup_db.sql.gz
+LEGACY_BACKUP_FILE=/data/backup_db.sql
 NEW_INSTALL=false
 RESTORE_MODE=false
 BUILD_TIMESTAMP="$(cat /build-timestamp)"
+
+# Checks whether a SQL dump (compressed, or uncompressed from older add-on versions) is present
+backupFileExists () {
+	[[ -f "${BACKUP_FILE}" ]] || [[ -f "${LEGACY_BACKUP_FILE}" ]]
+}
 
 # Applies permission to the data directory for the postgres user
 applyPermissions () {
@@ -25,8 +31,10 @@ applyPermissions () {
 
 # Initializes the data directory
 # $1: (optional) extra arguments for initdb
+# $2: (optional) password authentication method for pg_hba.conf (default: scram-sha-256)
 initializeDataDirectory () {
 	local INITDB_ARGS=${1:-}
+	local AUTH_METHOD=${2:-scram-sha-256}
 
 	# Init data-directory
     bashio::log.info "Initializing new postgres directory.."
@@ -37,11 +45,11 @@ initializeDataDirectory () {
 	sed -r -i "s/[#]*\s*(shared_preload_libraries)\s*=\s*'(.*)'/\1 = 'timescaledb,pg_stat_statements,\2'/;s/,'''/'/;s/,'/'/" ${POSTGRES_DATA}/postgresql.conf
 	
 	# Set Password protect IPv4 hosts by default
-	echo "host    all             all             0.0.0.0/0               md5" >> ${POSTGRES_DATA}/pg_hba.conf
+	echo "host    all             all             0.0.0.0/0               ${AUTH_METHOD}" >> ${POSTGRES_DATA}/pg_hba.conf
 	# Set Password protect IPv6 hosts by default
-	echo "host    all             all             ::/0                    md5" >> ${POSTGRES_DATA}/pg_hba.conf
-	echo "local    all             all                                    md5" >> ${POSTGRES_DATA}/pg_hba.conf
-	echo "local    all             all                                   peer" >> ${POSTGRES_DATA}/pg_hba.conf
+	echo "host    all             all             ::/0                    ${AUTH_METHOD}" >> ${POSTGRES_DATA}/pg_hba.conf
+	echo "local   all             all                                     ${AUTH_METHOD}" >> ${POSTGRES_DATA}/pg_hba.conf
+	echo "local   all             all                                     peer" >> ${POSTGRES_DATA}/pg_hba.conf
 	# Set Listen on all addresses (*)
 	sed -r -i "s/[#]listen_addresses.=.'.*'/listen_addresses\ \=\ \'\*\'/g" ${POSTGRES_DATA}/postgresql.conf
 
@@ -156,8 +164,10 @@ upgradePostgreSQL() {
 		INITDB_ARGS="--data-checksums"
 	fi
 
-	# Create a fresh data-directory
-	initializeDataDirectory "${INITDB_ARGS}"
+	# Create a fresh data-directory. Keep the 'md5' authentication method for upgraded clusters:
+	# existing users may still have MD5-hashed passwords, which 'scram-sha-256' would reject,
+	# while 'md5' accepts both MD5 and SCRAM password hashes.
+	initializeDataDirectory "${INITDB_ARGS}" "md5"
 
 	# And upgrade!
 	bashio::log.notice "Upgrading databases.."
@@ -189,7 +199,7 @@ if ! bashio::fs.directory_exists "${POSTGRES_DATA}"; then
     NEW_INSTALL=true
     
     # Check if we have a backup to restore from
-    if [[ -f "${BACKUP_FILE}" ]]; then
+    if backupFileExists; then
         bashio::log.notice "Found backup SQL file. Will restore after initialization."
         RESTORE_MODE=true
     fi
@@ -207,7 +217,7 @@ else
 	        mv "${POSTGRES_DATA}" "${POSTGRES_DATA}.corrupted.$(date +%Y%m%d_%H%M%S)"
 	    fi
 	    # If a SQL backup is available, restore from it; otherwise start fresh
-	    if [[ -f "${BACKUP_FILE}" ]]; then
+	    if backupFileExists; then
 	        bashio::log.warning "Database appears corrupted (missing PG_VERSION). Backup SQL found."
 	        bashio::log.warning "Will attempt to restore from backup..."
 	        RESTORE_MODE=true

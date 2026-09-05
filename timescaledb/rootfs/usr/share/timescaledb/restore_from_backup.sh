@@ -6,7 +6,11 @@
 declare BACKUP_FILE
 declare POSTGRES_DATA
 
-BACKUP_FILE="/data/backup_db.sql"
+# Compressed dump (add-on 6.0.0 and later); older versions wrote an uncompressed backup_db.sql
+BACKUP_FILE="/data/backup_db.sql.gz"
+if [[ ! -f "${BACKUP_FILE}" ]] && [[ -f "/data/backup_db.sql" ]]; then
+    BACKUP_FILE="/data/backup_db.sql"
+fi
 POSTGRES_DATA="/data/postgres"
 
 # Function to restore from SQL backup
@@ -15,7 +19,7 @@ restoreFromBackup() {
     bashio::log.notice "  DATABASE RESTORE IN PROGRESS"
     bashio::log.notice "==================================================================="
     bashio::log.notice "A backup SQL file was found. Attempting to restore database..."
-    
+
     # Verify backup file exists and is readable
     if [[ ! -f "${BACKUP_FILE}" ]]; then
         bashio::log.error "Backup file not found at ${BACKUP_FILE}"
@@ -67,7 +71,11 @@ restoreFromBackup() {
     mkdir -p /var/log
 
     # Restore the backup – capture psql's exit code via PIPESTATUS, not tee's
-    su - postgres -c "psql -X -U postgres -f ${BACKUP_FILE} -d postgres" 2>&1 | tee /var/log/timescaledb.restore.log
+    if [[ "${BACKUP_FILE}" == *.gz ]]; then
+        su - postgres -c "set -o pipefail; gunzip -c ${BACKUP_FILE} | psql -X -U postgres -d postgres" 2>&1 | tee /var/log/timescaledb.restore.log
+    else
+        su - postgres -c "psql -X -U postgres -f ${BACKUP_FILE} -d postgres" 2>&1 | tee /var/log/timescaledb.restore.log
+    fi
     RESTORE_EXIT=${PIPESTATUS[0]}
 
     if [[ "${RESTORE_EXIT}" -eq 0 ]]; then

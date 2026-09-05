@@ -33,7 +33,14 @@ done
 # Setup postgres user on first run
 if [[ -f "/data/firstrun" ]]; then
 	bashio::log.info "Setting up postgres user.."
-	psql -U "postgres" postgres -c "ALTER USER postgres WITH PASSWORD 'homeassistant';"
+	if bashio::config.has_value 'postgres_password'; then
+		POSTGRES_PASSWORD=$(bashio::config 'postgres_password')
+	else
+		POSTGRES_PASSWORD="homeassistant"
+		bashio::log.warning "No 'postgres_password' configured, using the default password 'homeassistant'. Please change it!"
+	fi
+	# Escape single quotes for the SQL literal
+	psql -U "postgres" postgres -c "ALTER USER postgres WITH PASSWORD '${POSTGRES_PASSWORD//\'/\'\'}';"
 fi
 
 # Check for extension updates..

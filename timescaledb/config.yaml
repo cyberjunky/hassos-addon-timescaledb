@@ -7,11 +7,8 @@ description: "An open-source database built on PostgreSQL for
 url: https://github.com/expaso/hassos-addon-timescaledb
 codenotary: hans@expaso.nl
 arch:
-  - armhf
   - aarch64
   - amd64
-  - armv7
-  - i386
 startup: system
 init: false
 tmpfs: true
@@ -46,6 +43,7 @@ options:
   postgresql_config: {}
   pg_hba_config: []
 schema:
+  postgres_password: password?
   databases:
     - str
   timescale_enabled:
