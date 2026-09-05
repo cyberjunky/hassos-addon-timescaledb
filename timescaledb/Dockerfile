@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 ARG BUILD_FROM=ghcr.io/hassio-addons/base/aarch64:20.2.0
 ARG BUILD_ARCH=aarch64
 
@@ -6,9 +7,12 @@ ARG BUILD_ARCH=aarch64
 # linked against have the same soname as the ones installed in this image.
 ARG ALPINE_VERSION=3.23
 
-# Registry holding the prebuilt dependency images (see docker-dependencies/ and project.sh).
-# Override this to build against your own registry, e.g. when testing a fork.
-ARG DEPENDENCY_REGISTRY=ghcr.io/expaso/timescaledb/dependency
+# Registry holding the prebuilt dependency images (see docker-dependencies/ and the
+# build-dependencies workflow). By default it is derived from the owner of the repository
+# that is being built (BUILD_REPOSITORY is passed by the CI workflows), so forks build against
+# their own dependency images. It can still be overridden explicitly.
+ARG BUILD_REPOSITORY=expaso/hassos-addon-timescaledb
+ARG DEPENDENCY_REGISTRY=ghcr.io/${BUILD_REPOSITORY%/*}/timescaledb/dependency
 
 # Define the versions for all components of the addon.
 # This is the single source of truth: project.sh and the build-dependencies workflow parse
