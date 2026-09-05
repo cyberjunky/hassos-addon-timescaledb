@@ -1,22 +1,14 @@
 #!/command/with-contenv bashio
 # shellcheck shell=bash
 # ==============================================================================
-# Home Assistant Community Add-on: Base Images
-# Displays a simple add-on banner on startup
+# Home Assistant Add-on: TimescaleDB
+# Displays a simple add-on banner on startup (based on the base image banner,
+# extended with the "Provided by" line and a standalone/docker mode).
 # ==============================================================================
 declare BUILD_TIMESTAMP
-declare RUNNING_IN_HA
+declare VERSION
 
 BUILD_TIMESTAMP="$(cat /build-timestamp)"
-
-set +u
-if bashio::supervisor.ping ; then
-    RUNNING_IN_HA="true"
-else
-    RUNNING_IN_HA="false"
-    bashio::log.magenta 'This is to be expected when running standalone.'
-fi
-set -u
 
 bashio::log.blue \
     '-----------------------------------------------------------'
@@ -28,24 +20,28 @@ bashio::log.blue " Provided by: Hans van Essen <hans@expaso.nl>"
 bashio::log.blue \
     '-----------------------------------------------------------'
 
-if (bashio::var.true "${RUNNING_IN_HA}"); then
-    bashio::log.blue " Add-on version: $(bashio::addon.version)"
-    if bashio::var.true "$(bashio::addon.update_available)"; then
-        bashio::log.magenta ' There is an update available for this add-on!'
-        bashio::log.magenta " Latest add-on version: $(bashio::addon.version_latest)"
-        bashio::log.magenta ' Please consider upgrading as soon as possible.'
+if bashio::supervisor.ping 2>/dev/null; then
+    # The version can only be read when the Supervisor grants API access to the add-on
+    VERSION=$(bashio::app.version 2>/dev/null || true)
+    if [[ -n "${VERSION}" ]] && [[ "${VERSION}" != "null" ]]; then
+        bashio::log.blue " Add-on version: ${VERSION}"
+        if bashio::var.true "$(bashio::app.update_available 2>/dev/null || echo false)"; then
+            bashio::log.magenta ' There is an update available for this add-on!'
+            bashio::log.magenta " Latest add-on version: $(bashio::app.version_latest 2>/dev/null || true)"
+            bashio::log.magenta ' Please consider upgrading as soon as possible.'
+        else
+            bashio::log.green ' You are running the latest version of this add-on.'
+        fi
     else
-        bashio::log.green ' You are running the latest version of this add-on.'
+        bashio::log.blue " Add-on build: ${BUILD_TIMESTAMP}"
     fi
     bashio::log.blue " System: $(bashio::info.operating_system)" \
         " ($(bashio::info.arch) / $(bashio::info.machine))"
-
     bashio::log.blue " Home Assistant Core: $(bashio::info.homeassistant)"
     bashio::log.blue " Home Assistant Supervisor: $(bashio::info.supervisor)"
 else
-    bashio::log.magenta " Addon running in standalone mode."
-    bashio::log.magenta " Addon Compile Date: ${BUILD_TIMESTAMP}"
-    bashio::log.green " You can safely ignore any API errors."
+    bashio::log.magenta " Add-on running in standalone mode (no Supervisor)."
+    bashio::log.magenta " Add-on build: ${BUILD_TIMESTAMP}"
 fi
 
 bashio::log.blue \
