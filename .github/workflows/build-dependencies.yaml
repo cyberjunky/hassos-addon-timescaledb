@@ -123,6 +123,8 @@ jobs:
     needs:
       - matrix
       - build
+    # Publish the components that did build, even if another component failed
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
