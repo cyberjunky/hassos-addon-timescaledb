@@ -54,13 +54,15 @@ jobs:
             --arg postgis "$(ver POSTGIS_VERSION)" \
             --arg sysstat "$(ver SYSTEM_STATS_VERSION)" \
             --arg pgvector "$(ver PGVECTOR_VERSION)" \
+            --arg pgcron "$(ver PG_CRON_VERSION)" \
             '[{component: "timescaledb-tools", version: "latest"}]
              + [ ("pg17", "pg18") as $pg |
                  {component: "pgagent-\($pg)",                          version: $pgagent},
                  {component: "timescaledb-toolkit-\($pg)",              version: $toolkit},
                  {component: "postgis-\($pg)",                          version: $postgis},
                  {component: "postgresql-extension-system-stat-\($pg)", version: $sysstat},
-                 {component: "pgvector-\($pg)",                         version: $pgvector} ]')
+                 {component: "pgvector-\($pg)",                         version: $pgvector},
+                 {component: "pg-cron-\($pg)",                          version: $pgcron} ]')
           runners='{"amd64": "ubuntu-latest", "arm64": "ubuntu-24.04-arm"}'
 
           merge=$(echo "${components}" | jq -c --arg c "${COMPONENT}" \

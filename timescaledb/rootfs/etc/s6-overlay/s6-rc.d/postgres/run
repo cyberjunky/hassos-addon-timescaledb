@@ -79,7 +79,18 @@ if bashio::var.true "${UPDATE}"; then
 		&& bashio::log.info "Try updating Vector Extension for database: '${datname}'.." \
 		&& psql -X -U postgres -d "${datname}" -c "ALTER EXTENSION vector UPDATE;" || true >> /var/log/vector.upgrade.log
 
+		# Update pg_cron extension when needed
+		psql -X -U postgres -d "${datname}" -c "select 1 from pg_extension where extname = 'pg_cron';" | grep -q 1 \
+		&& bashio::log.info "Try updating pg_cron Extension for database: '${datname}'.." \
+		&& psql -X -U postgres -d "${datname}" -c "ALTER EXTENSION pg_cron UPDATE;" || true >> /var/log/pg_cron.upgrade.log
+
 	done
+fi
+
+# Enable the pg_cron job scheduler in the 'postgres' database (see cron.database_name)
+if ! (psql -X -U postgres -d postgres -c "select 1 from pg_extension where extname = 'pg_cron';" | grep -q 1); then
+	bashio::log.info "Enabling pg_cron Extension.."
+	psql -U "postgres" -d postgres -c "CREATE EXTENSION IF NOT EXISTS pg_cron;" || true >> /var/log/pg_cron.create.log
 fi
 
 

@@ -26,6 +26,7 @@ ARG POSTGIS_VERSION=3.6.4
 ARG TIMESCALEDB_TOOLKIT_VERSION=1.26.0
 ARG SYSTEM_STATS_VERSION=4.1
 ARG PGVECTOR_VERSION=0.8.6
+ARG PG_CRON_VERSION=1.6.7
 
 FROM timescale/timescaledb:${TIMESCALEDB_VERSION}-pg17                                       AS timescale-pg17
 FROM timescale/timescaledb:${TIMESCALEDB_VERSION}-pg18                                       AS timescale-pg18
@@ -42,6 +43,8 @@ FROM ${DEPENDENCY_REGISTRY}/postgresql-extension-system-stat-pg17:${SYSTEM_STATS
 FROM ${DEPENDENCY_REGISTRY}/postgresql-extension-system-stat-pg18:${SYSTEM_STATS_VERSION}    AS system-stat-pg18
 FROM ${DEPENDENCY_REGISTRY}/pgvector-pg17:${PGVECTOR_VERSION}                                AS pgvector-pg17
 FROM ${DEPENDENCY_REGISTRY}/pgvector-pg18:${PGVECTOR_VERSION}                                AS pgvector-pg18
+FROM ${DEPENDENCY_REGISTRY}/pg-cron-pg17:${PG_CRON_VERSION}                                  AS pg-cron-pg17
+FROM ${DEPENDENCY_REGISTRY}/pg-cron-pg18:${PG_CRON_VERSION}                                  AS pg-cron-pg18
 
 
 ###########################################
@@ -248,6 +251,18 @@ COPY --from=pgvector-pg17 --link /usr/local/share/postgresql/extension/vector* /
 # --------------------------------------------
 COPY --from=pgvector-pg18 --link /usr/local/lib/postgresql/vector*.so /usr/lib/postgresql18/
 COPY --from=pgvector-pg18 --link /usr/local/share/postgresql/extension/vector* /usr/share/postgresql18/extension/
+
+# --------------------------------------------
+# Extension pg_cron pg-17 (old)
+# --------------------------------------------
+COPY --from=pg-cron-pg17 --link /usr/local/lib/postgresql/pg_cron*.so /usr/lib/postgresql17/
+COPY --from=pg-cron-pg17 --link /usr/local/share/postgresql/extension/pg_cron* /usr/share/postgresql17/extension/
+
+# --------------------------------------------
+# Extension pg_cron pg-18 (new)
+# --------------------------------------------
+COPY --from=pg-cron-pg18 --link /usr/local/lib/postgresql/pg_cron*.so /usr/lib/postgresql18/
+COPY --from=pg-cron-pg18 --link /usr/local/share/postgresql/extension/pg_cron* /usr/share/postgresql18/extension/
 
 # --------------------------------------
 # Timescaledb Tools (alwasys latest)

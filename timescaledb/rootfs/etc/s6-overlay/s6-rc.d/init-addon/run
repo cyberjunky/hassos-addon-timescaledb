@@ -30,6 +30,20 @@ applyPermissions () {
 	chmod 700 ${POSTGRES_DATA}
 }
 
+# Adds the pg_cron settings to postgresql.conf when they are not present yet.
+# pg_cron keeps its job tables in the 'postgres' database and runs jobs as background
+# workers, so it does not need a (password-less) network login to run jobs.
+applyPgCronSettings () {
+	if ! grep -q "^cron.database_name" "${POSTGRES_DATA}/postgresql.conf"; then
+		{
+			echo ""
+			echo "# pg_cron job scheduler"
+			echo "cron.database_name = 'postgres'"
+			echo "cron.use_background_workers = on"
+		} >> "${POSTGRES_DATA}/postgresql.conf"
+	fi
+}
+
 # Initializes the data directory
 # $1: (optional) extra arguments for initdb
 # $2: (optional) password authentication method for pg_hba.conf (default: scram-sha-256)
@@ -42,9 +56,10 @@ initializeDataDirectory () {
 	mkdir -p ${POSTGRES_DATA}
 	applyPermissions
 	su - postgres -c "initdb ${INITDB_ARGS} -D ${POSTGRES_DATA}"
-	# Set timescaledb and pg_stat_statements as being enabled in the postgres config file.
-	sed -r -i "s/[#]*\s*(shared_preload_libraries)\s*=\s*'(.*)'/\1 = 'timescaledb,pg_stat_statements,\2'/;s/,'''/'/;s/,'/'/" ${POSTGRES_DATA}/postgresql.conf
-	
+	# Set timescaledb, pg_stat_statements and pg_cron as being enabled in the postgres config file.
+	sed -r -i "s/[#]*\s*(shared_preload_libraries)\s*=\s*'(.*)'/\1 = 'timescaledb,pg_stat_statements,pg_cron,\2'/;s/,'''/'/;s/,'/'/" ${POSTGRES_DATA}/postgresql.conf
+	applyPgCronSettings
+
 	# Password protect IPv4 and IPv6 hosts by default, allow local peer and password logins
 	{
 		echo "host    all             all             0.0.0.0/0               ${AUTH_METHOD}"
@@ -298,6 +313,13 @@ if bashio::var.false "${NEW_INSTALL}"; then
 		sed -r -i "s/(shared_preload_libraries\s*=\s*'[^']*)(timescaledb)([^']*')/\1\2,pg_stat_statements\3/" ${POSTGRES_DATA}/postgresql.conf
 		bashio::log.info "done"
 	fi
+	# Same for pg_cron (added in add-on 6.0.0)
+	if ! grep -q "shared_preload_libraries.*pg_cron" ${POSTGRES_DATA}/postgresql.conf; then
+		bashio::log.info "Adding pg_cron to shared_preload_libraries.."
+		sed -r -i "s/(shared_preload_libraries\s*=\s*'[^']*)(timescaledb)([^']*')/\1\2,pg_cron\3/" ${POSTGRES_DATA}/postgresql.conf
+		bashio::log.info "done"
+	fi
+	applyPgCronSettings
 fi
 
 # Patch telemetry level

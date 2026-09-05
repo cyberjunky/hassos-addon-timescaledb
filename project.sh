@@ -201,6 +201,7 @@ elif [ "$1" == "build-dependencies" ]; then
             build_dependency "postgis-${pg}" "$(get_version POSTGIS_VERSION)"
             build_dependency "postgresql-extension-system-stat-${pg}" "$(get_version SYSTEM_STATS_VERSION)"
             build_dependency "pgvector-${pg}" "$(get_version PGVECTOR_VERSION)"
+            build_dependency "pg-cron-${pg}" "$(get_version PG_CRON_VERSION)"
         done
     else
         printInColor "Building dependency $2.."
