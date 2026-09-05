@@ -1,4 +1,5 @@
 #!/command/with-contenv bashio
+# shellcheck shell=bash
 # ==============================================================================
 # Home Assistant Add-on: TimescaleDb
 # Initializes the container during startup
@@ -44,12 +45,13 @@ initializeDataDirectory () {
 	# Set timescaledb and pg_stat_statements as being enabled in the postgres config file.
 	sed -r -i "s/[#]*\s*(shared_preload_libraries)\s*=\s*'(.*)'/\1 = 'timescaledb,pg_stat_statements,\2'/;s/,'''/'/;s/,'/'/" ${POSTGRES_DATA}/postgresql.conf
 	
-	# Set Password protect IPv4 hosts by default
-	echo "host    all             all             0.0.0.0/0               ${AUTH_METHOD}" >> ${POSTGRES_DATA}/pg_hba.conf
-	# Set Password protect IPv6 hosts by default
-	echo "host    all             all             ::/0                    ${AUTH_METHOD}" >> ${POSTGRES_DATA}/pg_hba.conf
-	echo "local   all             all                                     ${AUTH_METHOD}" >> ${POSTGRES_DATA}/pg_hba.conf
-	echo "local   all             all                                     peer" >> ${POSTGRES_DATA}/pg_hba.conf
+	# Password protect IPv4 and IPv6 hosts by default, allow local peer and password logins
+	{
+		echo "host    all             all             0.0.0.0/0               ${AUTH_METHOD}"
+		echo "host    all             all             ::/0                    ${AUTH_METHOD}"
+		echo "local   all             all                                     ${AUTH_METHOD}"
+		echo "local   all             all                                     peer"
+	} >> "${POSTGRES_DATA}/pg_hba.conf"
 	# Set Listen on all addresses (*)
 	sed -r -i "s/[#]listen_addresses.=.'.*'/listen_addresses\ \=\ \'\*\'/g" ${POSTGRES_DATA}/postgresql.conf
 
@@ -77,8 +79,8 @@ upgradeTimeScaleExtension () {
 		-t \
 		--field-separator ' ' \
 		--quiet \
-	| while read datname; do
-		psql -X -U postgres -d ${datname} -c "select 1 from pg_extension where extname = 'timescaledb';" | grep -q 1 \
+	| while read -r datname; do
+		psql -X -U postgres -d "${datname}" -c "select 1 from pg_extension where extname = 'timescaledb';" | grep -q 1 \
 		&& (
 			bashio::log.info "Try updating Timescale Extension for database: '${datname}'.."; \
 			# Drop the old functions and views, these could be incompatible with the new version.
@@ -88,21 +90,21 @@ upgradeTimeScaleExtension () {
 			psql -U "postgres" homeassistant -c "drop function if exists public.get_dimension_details(regclass)"; \
 			psql -U "postgres" homeassistant -c "drop view if exists public.chunks_tstz"; \
 			psql -U "postgres" homeassistant -c "drop view if exists public.chunks_ts"; \
-			(psql -X -U postgres -d ${datname} -c "ALTER EXTENSION timescaledb UPDATE;" || true)
+			(psql -X -U postgres -d "${datname}" -c "ALTER EXTENSION timescaledb UPDATE;" || true)
 		)
 
 		# Update Timescale Toolkit Extension when needed
-		psql -X -U postgres -d ${datname} -c "select 1 from pg_extension where extname = 'timescaledb_toolkit';" | grep -q 1 \
+		psql -X -U postgres -d "${datname}" -c "select 1 from pg_extension where extname = 'timescaledb_toolkit';" | grep -q 1 \
 		&& (
 			bashio::log.info "Try updating Timescale Toolkit Extension for database: '${datname}'.."; \
-			(psql -X -U postgres -d ${datname} -c "ALTER EXTENSION timescaledb_toolkit UPDATE;" || true)
+			(psql -X -U postgres -d "${datname}" -c "ALTER EXTENSION timescaledb_toolkit UPDATE;" || true)
 		)
 
 		# Update Vector extension when needed
-		psql -X -U postgres -d ${datname} -c "select 1 from pg_extension where extname = 'vector';" | grep -q 1 \
+		psql -X -U postgres -d "${datname}" -c "select 1 from pg_extension where extname = 'vector';" | grep -q 1 \
 		&& (
 			bashio::log.info "Try updating Vector Extension for database: '${datname}'.."; \
-			(psql -X -U postgres -d ${datname} -c "ALTER EXTENSION vector UPDATE;" || true)
+			(psql -X -U postgres -d "${datname}" -c "ALTER EXTENSION vector UPDATE;" || true)
 		)
 
 	done
@@ -120,14 +122,14 @@ upgradePostgreSQL() {
 	bashio::log.notice "Upgrading databases now. This could take a while. Please be patient..."
 
 	# Move the old data directory out of our way..
-	mv ${POSTGRES_DATA} ${POSTGRES_DATA}${FROM_VERSION}
+	mv "${POSTGRES_DATA}" "${POSTGRES_DATA}${FROM_VERSION}"
 
 	# And upgrade PostgreSQL
 	bashio::log.notice "Upgrading PostgreSql from ${FROM_VERSION} to ${TO_VERSION}.."
 
 	# Backup old HBA.conf and create a temp one...
-	mv ${POSTGRES_DATA}${FROM_VERSION}/pg_hba.conf ${POSTGRES_DATA}${FROM_VERSION}/pg_hba_backup.conf
-	echo "local    all             all                                     trust" > ${POSTGRES_DATA}${FROM_VERSION}/pg_hba.conf
+	mv "${POSTGRES_DATA}${FROM_VERSION}/pg_hba.conf" "${POSTGRES_DATA}${FROM_VERSION}/pg_hba_backup.conf"
+	echo "local    all             all                                     trust" > "${POSTGRES_DATA}${FROM_VERSION}/pg_hba.conf"
 
 	#Start postgres on the old data-dir
 	bashio::log.info "Starting PostgreSQL-${FROM_VERSION} first.."
@@ -144,19 +146,19 @@ upgradePostgreSQL() {
 
 	# Stop server
 	bashio::log.notice "Stopping PostgreSql ${FROM_VERSION}.."
-	kill ${postgres_pid}
-	wait ${postgres_pid} || true
+	kill "${postgres_pid}"
+	wait "${postgres_pid}" || true
 	bashio::log.notice "done"
 
 	# Restore HBA.CONF
-	rm ${POSTGRES_DATA}${FROM_VERSION}/pg_hba.conf
-	mv ${POSTGRES_DATA}${FROM_VERSION}/pg_hba_backup.conf ${POSTGRES_DATA}${FROM_VERSION}/pg_hba.conf
+	rm "${POSTGRES_DATA}${FROM_VERSION}/pg_hba.conf"
+	mv "${POSTGRES_DATA}${FROM_VERSION}/pg_hba_backup.conf" "${POSTGRES_DATA}${FROM_VERSION}/pg_hba.conf"
 
 	# pg_upgrade requires the old and new cluster to agree on data checksums.
 	# Since PostgreSQL 18, initdb enables checksums by default, while older clusters
 	# were created without them. Match the setting of the old cluster.
 	local INITDB_ARGS=""
-	if /usr/libexec/postgresql${FROM_VERSION}/pg_controldata ${POSTGRES_DATA}${FROM_VERSION} | grep -qE "^Data page checksum version:\s+0$"; then
+	if "/usr/libexec/postgresql${FROM_VERSION}/pg_controldata" "${POSTGRES_DATA}${FROM_VERSION}" | grep -qE "^Data page checksum version:\s+0$"; then
 		bashio::log.info "Old cluster has no data checksums, creating new cluster without checksums.."
 		INITDB_ARGS="--no-data-checksums"
 	else
@@ -171,19 +173,19 @@ upgradePostgreSQL() {
 
 	# And upgrade!
 	bashio::log.notice "Upgrading databases.."
-	cd ${POSTGRES_DATA}${FROM_VERSION}
+	cd "${POSTGRES_DATA}${FROM_VERSION}" || return 1
 	if su -c "pg_upgrade --old-bindir=/usr/libexec/postgresql${FROM_VERSION} --new-bindir=/usr/libexec/postgresql${TO_VERSION} --old-datadir=${POSTGRES_DATA}${FROM_VERSION} --new-datadir=${POSTGRES_DATA} --link --username=postgres" -s /bin/sh postgres; then
 		bashio::log.notice "PostgreSQL upgraded succesfully!"
 		# Remove the old cluster...
-		rm -r ${POSTGRES_DATA}${FROM_VERSION}
+		rm -r "${POSTGRES_DATA}${FROM_VERSION}"
 		return 0
 	else
 		# copy logs
-		cp -r /data/postgres/pg_upgrade_output.d  ${POSTGRES_DATA}${FROM_VERSION} || true
+		cp -r /data/postgres/pg_upgrade_output.d "${POSTGRES_DATA}${FROM_VERSION}" || true
 
 		# Rollback..
-		rm -r ${POSTGRES_DATA}
-		mv ${POSTGRES_DATA}${FROM_VERSION} ${POSTGRES_DATA}
+		rm -r "${POSTGRES_DATA}"
+		mv "${POSTGRES_DATA}${FROM_VERSION}" "${POSTGRES_DATA}"
 
 		bashio::log.error "PostgreSQL could not upgrade! Please inspect any errors in the lines above!"
 		return 1
@@ -237,6 +239,7 @@ if bashio::var.true "${NEW_INSTALL}"; then
 	# Restore from backup if available
 	if bashio::var.true "${RESTORE_MODE}"; then
 	    bashio::log.notice "Restore mode enabled. Loading restore script..."
+	    # shellcheck source=/dev/null
 	    source /usr/share/timescaledb/restore_from_backup.sh
 	    
 	    if restoreFromBackup; then
@@ -253,18 +256,18 @@ if bashio::var.true "${NEW_INSTALL}"; then
 else
 
 	# Check if we need to restore again.
-	if $(bashio::config.true 'retry_upgrade'); then
+	if bashio::config.true 'retry_upgrade'; then
 		if bashio::fs.directory_exists "${POSTGRES_DATA}17"; then
 			bashio::log.notice "An aborted upgrade from Postgres 17 was detected. Restoring.."
-			rm -r ${POSTGRES_DATA}
-			mv ${POSTGRES_DATA}17 ${POSTGRES_DATA}
+			rm -r "${POSTGRES_DATA}"
+			mv "${POSTGRES_DATA}17" "${POSTGRES_DATA}"
 		else
 			bashio::config.suggest.false 'retry_upgrade' 'This option is only for temporary reasons: to recover from a failed upgrade.'
 		fi
 	fi
 
 	# Postgres versions older than 17 can no longer be upgraded by this addon version.
-	CURRENT_PG_VERSION=$(< ${POSTGRES_DATA}/PG_VERSION)
+	CURRENT_PG_VERSION=$(< "${POSTGRES_DATA}/PG_VERSION")
 	if [[ "${CURRENT_PG_VERSION}" =~ ^(12|13|14|15|16)$ ]]; then
 		bashio::log.notice "A database upgrade is required from Postgres ${CURRENT_PG_VERSION}."
 		bashio::log.error "Upgrade was not succesfull. This addon version does no longer support Postgres ${CURRENT_PG_VERSION}."

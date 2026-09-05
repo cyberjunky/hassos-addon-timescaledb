@@ -71,9 +71,9 @@ function build() {
     # Push the dev image to docker hub
     # build the image
     docker buildx build \
-        --platform ${PLATFORM} \
-        --cache-from type=registry,ref=${REGISTRY}:cache \
-        --tag ${REGISTRY}/aarch64:dev \
+        --platform "${PLATFORM}" \
+        --cache-from "type=registry,ref=${REGISTRY}:cache" \
+        --tag "${REGISTRY}/aarch64:dev" \
         --progress plain \
         --build-arg CACHE_BUST="$(date +%s)" \
         --build-arg "DEPENDENCY_REGISTRY=${REGISTRY}/dependency" \
@@ -107,7 +107,7 @@ function run_local() {
 
     # Run the docker image locally
     mkdir -p /tmp/timescale_data
-    docker run --rm --name timescaledb --platform ${PLATFORM} -v /tmp/timescale_data:/data -p 5432:5432 ${REGISTRY}/aarch64:dev  
+    docker run --rm --name timescaledb --platform "${PLATFORM}" -v /tmp/timescale_data:/data -p 5432:5432 "${REGISTRY}/aarch64:dev"  
 }
 
 function release() {
@@ -132,7 +132,7 @@ function inspect() {
 
     # Run the docker image locally
     mkdir -p /tmp/timescale_data
-    docker run --entrypoint "/bin/ash" -it --rm --name timescaledb --platform ${PLATFORM} -v /tmp/timescale_data:/data -p 5432:5432 ${REGISTRY}/aarch64:dev
+    docker run --entrypoint "/bin/ash" -it --rm --name timescaledb --platform "${PLATFORM}" -v /tmp/timescale_data:/data -p 5432:5432 "${REGISTRY}/aarch64:dev"
 }
 
 function build_all() {
@@ -161,8 +161,8 @@ function build_all() {
 
         docker buildx build \
             --platform "${docker_platform}" \
-            --cache-from type=registry,ref=${REGISTRY}:cache \
-            --cache-to type=registry,ref=${REGISTRY}:cache,mode=max \
+            --cache-from "type=registry,ref=${REGISTRY}:cache" \
+            --cache-to "type=registry,ref=${REGISTRY}:cache,mode=max" \
             --tag "${REGISTRY}/${platform}:${tag}" \
             --build-arg "BUILD_FROM=${build_from}" \
             --build-arg "BUILD_ARCH=${platform}" \
