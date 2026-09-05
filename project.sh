@@ -7,6 +7,12 @@ PLATFORM="linux/arm64"
 #   REGISTRY=ghcr.io/<your-user>/timescaledb ./project.sh build-dependencies
 REGISTRY="${REGISTRY:-ghcr.io/expaso/timescaledb}"
 
+# Reads a component version from the ARG lines at the top of timescaledb/Dockerfile,
+# which is the single source of truth for all component versions.
+function get_version() {
+    sed -n "s/^ARG $1=//p" ./timescaledb/Dockerfile
+}
+
 function printInColor() {
     # Set the color code based on the color name
     color=0
@@ -44,12 +50,13 @@ function build_dependency() {
 
     docker buildx build \
         --push \
-        --platform "linux/amd64,linux/arm64,linux/arm/v7,linux/i386,linux/arm/v6" \
+        --platform "linux/amd64,linux/arm64" \
         --cache-from "type=registry,ref=${REGISTRY}/dependency/${component}:cache" \
         --cache-to "type=registry,ref=${REGISTRY}/dependency/${component}:cache,mode=max" \
         --tag "${REGISTRY}/dependency/${component}:${version}" \
         --progress plain \
         --build-arg "VERSION=${version}" \
+        --build-arg "TIMESCALEDB_VERSION=$(get_version TIMESCALEDB_VERSION)" \
         --file "./timescaledb/docker-dependencies/${component}" \
         . \
         && printInColor "Done building docker image!" "green"    
@@ -186,18 +193,15 @@ elif [ "$1" == "build-dependencies" ]; then
     if [ -z "$2" ]; then
         printInColor "Building all dependencies.."
 
-        # Keep these versions in sync with the FROM lines in timescaledb/Dockerfile
+        # Versions come from the ARG lines in timescaledb/Dockerfile
         build_dependency timescaledb-tools "latest"
-        build_dependency pgagent-pg17 "pgagent-4.2.3"
-        build_dependency pgagent-pg18 "pgagent-4.2.3"
-        build_dependency timescaledb-toolkit-pg17 "1.26.0"
-        build_dependency timescaledb-toolkit-pg18 "1.26.0"
-        build_dependency postgis-pg17 "3.6.4"
-        build_dependency postgis-pg18 "3.6.4"
-        build_dependency postgresql-extension-system-stat-pg17 "4.1"
-        build_dependency postgresql-extension-system-stat-pg18 "4.1"
-        build_dependency pgvector-pg17 "0.8.6"
-        build_dependency pgvector-pg18 "0.8.6"
+        for pg in pg17 pg18; do
+            build_dependency "pgagent-${pg}" "$(get_version PGAGENT_VERSION)"
+            build_dependency "timescaledb-toolkit-${pg}" "$(get_version TIMESCALEDB_TOOLKIT_VERSION)"
+            build_dependency "postgis-${pg}" "$(get_version POSTGIS_VERSION)"
+            build_dependency "postgresql-extension-system-stat-${pg}" "$(get_version SYSTEM_STATS_VERSION)"
+            build_dependency "pgvector-${pg}" "$(get_version PGVECTOR_VERSION)"
+        done
     else
         printInColor "Building dependency $2.."
         build_dependency "$2" "$3"

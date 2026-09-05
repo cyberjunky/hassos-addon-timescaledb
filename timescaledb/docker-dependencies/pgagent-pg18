@@ -1,4 +1,6 @@
-FROM timescale/timescaledb:2.29.2-pg18
+# Version of the timescale/timescaledb image to build against (passed by project.sh / the workflow)
+ARG TIMESCALEDB_VERSION=2.29.2
+FROM timescale/timescaledb:${TIMESCALEDB_VERSION}-pg18
 ARG VERSION
 ARG TARGETARCH
 ARG TARGETVARIANT

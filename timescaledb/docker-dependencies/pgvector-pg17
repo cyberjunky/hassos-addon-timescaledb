@@ -1,4 +1,6 @@
-FROM timescale/timescaledb:2.29.2-pg17 AS timescale-pg17
+# Version of the timescale/timescaledb image to build against (passed by project.sh / the workflow)
+ARG TIMESCALEDB_VERSION=2.29.2
+FROM timescale/timescaledb:${TIMESCALEDB_VERSION}-pg17 AS timescale-pg17
 
 FROM timescale-pg17 AS pgvector
 ARG VERSION

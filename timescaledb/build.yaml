@@ -1,10 +1,9 @@
 ---
+# Home Assistant dropped 32-bit architectures (i386, armhf, armv7) with release 2025.12,
+# and the base image is only published for aarch64/amd64 from v19 onwards.
 build_from:
   aarch64: ghcr.io/hassio-addons/base/aarch64:20.2.0
   amd64: ghcr.io/hassio-addons/base/amd64:20.2.0
-  armhf: ghcr.io/hassio-addons/base/armhf:20.2.0
-  armv7: ghcr.io/hassio-addons/base/armv7:20.2.0
-  i386: ghcr.io/hassio-addons/base/i386:20.2.0
 # identity: hans@expaso.nl
 # base_identity: codenotary@frenck.dev
 codenotary:

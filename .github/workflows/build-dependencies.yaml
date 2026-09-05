@@ -33,27 +33,34 @@ jobs:
     outputs:
       build: ${{ steps.set.outputs.build }}
       merge: ${{ steps.set.outputs.merge }}
+      timescaledb_version: ${{ steps.set.outputs.timescaledb_version }}
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
       - name: Compose matrix
         id: set
         env:
           COMPONENT: ${{ inputs.component }}
           PLATFORMS: ${{ inputs.platforms }}
         run: |
-          # Keep these versions in sync with the FROM lines in timescaledb/Dockerfile
-          components='[
-            {"component": "timescaledb-tools",                        "version": "latest"},
-            {"component": "pgagent-pg17",                             "version": "pgagent-4.2.3"},
-            {"component": "pgagent-pg18",                             "version": "pgagent-4.2.3"},
-            {"component": "timescaledb-toolkit-pg17",                 "version": "1.26.0"},
-            {"component": "timescaledb-toolkit-pg18",                 "version": "1.26.0"},
-            {"component": "postgis-pg17",                             "version": "3.6.4"},
-            {"component": "postgis-pg18",                             "version": "3.6.4"},
-            {"component": "postgresql-extension-system-stat-pg17",    "version": "4.1"},
-            {"component": "postgresql-extension-system-stat-pg18",    "version": "4.1"},
-            {"component": "pgvector-pg17",                            "version": "0.8.6"},
-            {"component": "pgvector-pg18",                            "version": "0.8.6"}
-          ]'
+          # Component versions are defined once, as ARG lines at the top of timescaledb/Dockerfile
+          ver() { sed -n "s/^ARG $1=//p" timescaledb/Dockerfile; }
+          echo "timescaledb_version=$(ver TIMESCALEDB_VERSION)" >> "${GITHUB_OUTPUT}"
+
+          components=$(jq -nc \
+            --arg pgagent "$(ver PGAGENT_VERSION)" \
+            --arg toolkit "$(ver TIMESCALEDB_TOOLKIT_VERSION)" \
+            --arg postgis "$(ver POSTGIS_VERSION)" \
+            --arg sysstat "$(ver SYSTEM_STATS_VERSION)" \
+            --arg pgvector "$(ver PGVECTOR_VERSION)" \
+            '[{component: "timescaledb-tools", version: "latest"}]
+             + [ ("pg17", "pg18") as $pg |
+                 {component: "pgagent-\($pg)",                          version: $pgagent},
+                 {component: "timescaledb-toolkit-\($pg)",              version: $toolkit},
+                 {component: "postgis-\($pg)",                          version: $postgis},
+                 {component: "postgresql-extension-system-stat-\($pg)", version: $sysstat},
+                 {component: "pgvector-\($pg)",                         version: $pgvector} ]')
           runners='{"amd64": "ubuntu-latest", "arm64": "ubuntu-24.04-arm"}'
 
           merge=$(echo "${components}" | jq -c --arg c "${COMPONENT}" \
@@ -100,6 +107,7 @@ jobs:
           platforms: linux/${{ matrix.platform }}
           build-args: |
             VERSION=${{ matrix.version }}
+            TIMESCALEDB_VERSION=${{ needs.matrix.outputs.timescaledb_version }}
           cache-from: type=gha,scope=${{ matrix.component }}-${{ matrix.platform }}
           cache-to: type=gha,scope=${{ matrix.component }}-${{ matrix.platform }},mode=max
           outputs: type=image,name=${{ env.REGISTRY }}/${{ matrix.component }},push-by-digest=true,name-canonical=true,push=true

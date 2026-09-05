@@ -10,25 +10,34 @@ ARG ALPINE_VERSION=3.23
 # Override this to build against your own registry, e.g. when testing a fork.
 ARG DEPENDENCY_REGISTRY=ghcr.io/expaso/timescaledb/dependency
 
-# Define the versions for all components of the addon
+# Define the versions for all components of the addon.
+# This is the single source of truth: project.sh and the build-dependencies workflow parse
+# these ARG lines to build the prebuilt dependency images with matching tags.
 # These images are all prebuild, otherwise building the docker images takes waaaay to long
 # Where possible, we just take the latest version from the Alpine repository, so it's
 # possible we won't mention the latest version here.
-FROM timescale/timescaledb:2.29.2-pg17                                          AS timescale-pg17
-FROM timescale/timescaledb:2.29.2-pg18                                          AS timescale-pg18
+ARG TIMESCALEDB_VERSION=2.29.2
+ARG PGAGENT_VERSION=pgagent-4.2.3
+ARG POSTGIS_VERSION=3.6.4
+ARG TIMESCALEDB_TOOLKIT_VERSION=1.26.0
+ARG SYSTEM_STATS_VERSION=4.1
+ARG PGVECTOR_VERSION=0.8.6
+
+FROM timescale/timescaledb:${TIMESCALEDB_VERSION}-pg17                                       AS timescale-pg17
+FROM timescale/timescaledb:${TIMESCALEDB_VERSION}-pg18                                       AS timescale-pg18
 
 # hadolint ignore=DL3007
-FROM ${DEPENDENCY_REGISTRY}/timescaledb-tools:latest                             AS timescaledb-tools
-FROM ${DEPENDENCY_REGISTRY}/pgagent-pg17:pgagent-4.2.3                           AS pgagent-pg17
-FROM ${DEPENDENCY_REGISTRY}/pgagent-pg18:pgagent-4.2.3                           AS pgagent-pg18
-FROM ${DEPENDENCY_REGISTRY}/postgis-pg17:3.6.4                                   AS postgis-pg17
-FROM ${DEPENDENCY_REGISTRY}/postgis-pg18:3.6.4                                   AS postgis-pg18
-FROM ${DEPENDENCY_REGISTRY}/timescaledb-toolkit-pg17:1.26.0                      AS timescaledb-toolkit-pg17
-FROM ${DEPENDENCY_REGISTRY}/timescaledb-toolkit-pg18:1.26.0                      AS timescaledb-toolkit-pg18
-FROM ${DEPENDENCY_REGISTRY}/postgresql-extension-system-stat-pg17:4.1            AS system-stat-pg17
-FROM ${DEPENDENCY_REGISTRY}/postgresql-extension-system-stat-pg18:4.1            AS system-stat-pg18
-FROM ${DEPENDENCY_REGISTRY}/pgvector-pg17:0.8.6                                  AS pgvector-pg17
-FROM ${DEPENDENCY_REGISTRY}/pgvector-pg18:0.8.6                                  AS pgvector-pg18
+FROM ${DEPENDENCY_REGISTRY}/timescaledb-tools:latest                                         AS timescaledb-tools
+FROM ${DEPENDENCY_REGISTRY}/pgagent-pg17:${PGAGENT_VERSION}                                  AS pgagent-pg17
+FROM ${DEPENDENCY_REGISTRY}/pgagent-pg18:${PGAGENT_VERSION}                                  AS pgagent-pg18
+FROM ${DEPENDENCY_REGISTRY}/postgis-pg17:${POSTGIS_VERSION}                                  AS postgis-pg17
+FROM ${DEPENDENCY_REGISTRY}/postgis-pg18:${POSTGIS_VERSION}                                  AS postgis-pg18
+FROM ${DEPENDENCY_REGISTRY}/timescaledb-toolkit-pg17:${TIMESCALEDB_TOOLKIT_VERSION}          AS timescaledb-toolkit-pg17
+FROM ${DEPENDENCY_REGISTRY}/timescaledb-toolkit-pg18:${TIMESCALEDB_TOOLKIT_VERSION}          AS timescaledb-toolkit-pg18
+FROM ${DEPENDENCY_REGISTRY}/postgresql-extension-system-stat-pg17:${SYSTEM_STATS_VERSION}    AS system-stat-pg17
+FROM ${DEPENDENCY_REGISTRY}/postgresql-extension-system-stat-pg18:${SYSTEM_STATS_VERSION}    AS system-stat-pg18
+FROM ${DEPENDENCY_REGISTRY}/pgvector-pg17:${PGVECTOR_VERSION}                                AS pgvector-pg17
+FROM ${DEPENDENCY_REGISTRY}/pgvector-pg18:${PGVECTOR_VERSION}                                AS pgvector-pg18
 
 
 ###########################################
@@ -279,7 +288,7 @@ LABEL \
     io.hass.name="Timescaledb HA Addon (${BUILD_ARCH})" \
     io.hass.description="Home Assistant Add-on: TimescaleDb" \
     io.hass.arch="${BUILD_ARCH}" \
-    io.hass.type="base" \
+    io.hass.type="addon" \
     io.hass.version=${BUILD_VERSION} \
     io.hass.base.version=${BUILD_VERSION} \
     io.hass.base.name="alpine" \

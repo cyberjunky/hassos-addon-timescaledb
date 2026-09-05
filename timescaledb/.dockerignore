@@ -1,2 +1,8 @@
-rootfs/opt/filiibot/node_modules
-rootfs/opt/filiibot/npm-debug.log
+# Not needed inside the add-on image (the dependency builders use the repository root as context)
+docker-dependencies/
+pgagent/
+pgagent.patch
+build.yaml
+config.yaml
+.README.j2
+*.md
