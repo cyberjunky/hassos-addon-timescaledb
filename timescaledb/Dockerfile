@@ -74,6 +74,17 @@ RUN --mount=type=cache,id=apk-${TARGETARCH}-${TARGETVARIANT},sharing=locked,targ
     set -ex \
     && apk add --upgrade libssl3 libcrypto3 openssl-dev
 
+# Upgrade bashio: the base image ships 0.18.0, whose add-on info helpers (bashio::addon.*)
+# always query /store/addons, which the Supervisor no longer allows for add-ons (403). Fixed in 0.19.0.
+ARG BASHIO_VERSION="v0.19.0"
+RUN curl -J -L -s -o /tmp/bashio.tar.gz \
+        "https://github.com/hassio-addons/bashio/archive/${BASHIO_VERSION}.tar.gz" \
+    && mkdir -p /tmp/bashio \
+    && tar zxf /tmp/bashio.tar.gz --strip 1 -C /tmp/bashio \
+    && rm -rf /usr/lib/bashio \
+    && mv /tmp/bashio/lib /usr/lib/bashio \
+    && rm -rf /tmp/bashio /tmp/bashio.tar.gz
+
 ###########################################
 # Install all sub-components
 ###########################################
