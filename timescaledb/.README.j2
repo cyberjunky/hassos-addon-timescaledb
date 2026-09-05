@@ -8,7 +8,7 @@
 
 ## [PostgreSql 18.6](https://www.postgresql.org/) & [Postgis 3.6.4](https://postgis.net/) & [TimescaleDB 2.29.2](https://www.timescale.com/) & [TimescaleDB Toolkit 1.26.0](https://github.com/timescale/timescaledb-toolkit) & [pgVector 0.8.6](https://github.com/pgvector/pgvector) & [pgAgent 4.2.3](https://www.pgadmin.org/docs/pgadmin4/development/pgagent.html)
 
-#### Configuation
+#### Configuration
 
 Example add-on configuration:
 
@@ -19,18 +19,24 @@ Example add-on configuration:
     "timescaledb": {
       "telemetry": "basic",
       "maxmemory": "512MB",
-      "maxcpus": "4"
+      "maxcpus": 4
       },
-      "max_connections": 20,
+      "max_connections": 50,
       "system_packages": [],
       "init_commands": []
  }
 ```
 
+#### Option: `postgres_password`
+
+The password of the `postgres` superuser. It is only applied when the database is created (on the first start of the add-on).
+When left empty, the password `homeassistant` is used, which you should change right away.
+To change the password of an existing installation, use `ALTER USER` as described in the _Usage_ section below.
+
 #### Option: `databases`
 
 Sets a list of database-names that will be created for you, once you start the add-on.
-You can also create databases on your own ofcourse, using a psql client of your choice.
+You can also create databases on your own of course, using a psql client of your choice.
 
 #### Option: `timescale_enabled`
 
@@ -51,12 +57,12 @@ It's important to leave breathing room for other processes on your machine (or r
 Example: `maxmemory="1024MB"`
 Or leave empty for accepting auto-tune.
 
-#### Option: `timescaledb.maxcpu`
+#### Option: `timescaledb.maxcpus`
 
 Sets the maximum number of cores that PostgreSQL will use.
 It's important to leave breathing room for other processes on your machine (or raspberry pi), so set these level not too high (say max 75% of your total number of cores).
 
-Example: `maxcpu="2"`
+Example: `maxcpus=2`
 Or leave empty for accepting auto-tune.
 
 See also:
@@ -73,7 +79,7 @@ Example: `max_connections=30`
 #### Option: `system_packages`
 
 Advanced users only!
-A list of extra alpine packages to iunstall during addon-startup.
+A list of extra alpine packages to install during addon-startup.
 
 Example: ['nano']
 
@@ -140,9 +146,6 @@ pull one of the images for the desired architecture from docker hub:
 ```
 docker pull ghcr.io/expaso/timescaledb/amd64:stable
 docker pull ghcr.io/expaso/timescaledb/aarch64:stable
-docker pull ghcr.io/expaso/timescaledb/armv7:stable
-docker pull ghcr.io/expaso/timescaledb/armhf:stable
-docker pull ghcr.io/expaso/timescaledb/i386:stable
 ```
 
 You can replace *stable* with the version number you want to use.
@@ -153,7 +156,7 @@ Simply start it like this:
 docker run \
   --rm \
   --name timescaledb \
-  --v ${PWD}/timescaledb_addon_data:/data \
+  -v ${PWD}/timescaledb_addon_data:/data \
   -p 5432:5432 \
   ghcr.io/expaso/timescaledb/amd64:stable
 ```
@@ -166,7 +169,7 @@ If you want to start the container as a daemon, simply remove the `--rm` option 
 docker run \
   -d \
   --name timescaledb \
-  --v ${PWD}/timescaledb_addon_data:/data \
+  -v ${PWD}/timescaledb_addon_data:/data \
   -p 5432:5432 \
   ghcr.io/expaso/timescaledb/amd64:stable
 ```
@@ -182,8 +185,8 @@ The default is port `5432`
 
 **Securiy Notice!**
 
-The default username is `postgres` with password `homeassistant`.
-Make sure you change this immediately after activating the add-on:
+The default username is `postgres`. The initial password is taken from the `postgres_password` option,
+or `homeassistant` when that option is left empty. In that case make sure you change it immediately after activating the add-on:
 
 ```
 ALTER USER postgres WITH PASSWORD 'strongpassword';
@@ -200,14 +203,18 @@ ALTER DATABASE mydatabase OWNER TO homeassistant;
 ```
 
 
-A default `pg_hba.conf` is created in the data directory with the following content, which allows local peer users and network users with passwords.:
+A default `pg_hba.conf` is created in the data directory with the following content, which allows local peer users and network users with passwords:
 
 ```
 # TYPE  DATABASE        USER            ADDRESS                 METHOD
-host    all             all             0.0.0.0/0               md5"
-local   all             all             0.0.0.0/0               md5"
-local   all             all             0.0.0.0/0               peer"
+host    all             all             0.0.0.0/0               scram-sha-256
+host    all             all             ::/0                    scram-sha-256
+local   all             all                                     scram-sha-256
+local   all             all                                     peer
 ```
+
+Installations created before add-on version 6.0.0 (and databases upgraded from PostgreSQL 17) keep the `md5` method,
+which accepts both MD5 and SCRAM password hashes. Use the `pg_hba_config` option to add your own rules.
 
 Please review this configuration carefully by examine the docs:
 https://www.postgresql.org/docs/devel/auth-pg-hba-conf.html
@@ -220,7 +227,7 @@ This addon implements a robust backup and restore mechanism designed to protect 
 
 When Home Assistant's backup system runs, it automatically:
 
-1. **Pre-Backup**: Executes `pg_dumpall` to create a complete SQL dump of all databases (`backup_db.sql`)
+1. **Pre-Backup**: Executes `pg_dumpall` to create a complete, gzip-compressed SQL dump of all databases (`backup_db.sql.gz`)
 2. **Backup**: Backs up the SQL dump file along with other addon data (but excludes the PostgreSQL data directory)
 3. **Post-Backup**: Removes the temporary SQL dump file to save space
 
@@ -235,7 +242,7 @@ This approach has several advantages:
 
 When you restore a Home Assistant backup:
 
-1. The addon starts up with the restored `backup_db.sql` file
+1. The addon starts up with the restored `backup_db.sql.gz` file (or an uncompressed `backup_db.sql` from older add-on versions)
 2. If the PostgreSQL data directory is missing or corrupted, the addon:
    - Initializes a fresh PostgreSQL database
    - Automatically restores all data from the SQL dump
@@ -275,11 +282,11 @@ docker exec addon_timescaledb_timescaledb su - postgres -c "psql -U postgres -f 
 **If restore fails:**
 
 1. Check the addon logs for detailed error messages
-2. The backup SQL file will be preserved at `/data/backup_db.sql` for manual recovery
+2. The backup SQL file will be preserved at `/data/backup_db.sql.gz` for manual recovery
 3. You can attempt manual restoration using:
 
    ```bash
-   docker exec -it addon_timescaledb_timescaledb su - postgres -c "psql -U postgres -f /data/backup_db.sql -d postgres"
+   docker exec -it addon_timescaledb_timescaledb su - postgres -c "gunzip -c /data/backup_db.sql.gz | psql -U postgres -d postgres"
    ```
 
 **If backup fails:**
