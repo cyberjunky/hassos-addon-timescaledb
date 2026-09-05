@@ -1,8 +1,7 @@
-
-FROM timescale/timescaledb:latest-pg16 AS timescale-pg16
+FROM timescale/timescaledb:2.29.2-pg18 AS timescale-pg18
 
 # --------------------------------------
-# PostGIS - Build and install OLD Postgis (for upgrade reasons)
+# PostGIS - Build and install for pg18
 # --------------------------------------
 ARG VERSION
 ARG TARGETARCH
@@ -13,21 +12,21 @@ ARG TARGETVARIANT
 RUN --mount=type=cache,id=apk-${TARGETARCH}-${TARGETVARIANT},sharing=locked,target=/var/cache/apk \
     set -ex \
     && apk update \
-    && apk add  \
-	openexr \ 
-    poppler \
-    gdal \
-    geos \
-    json-c \
-    libgcc \
-    libpq \
-    libstdc++ \
-    libxml2 \ 
-    musl \
-    pcre \
-    perl \
-    proj \
-    protobuf-c
+    && apk add \
+        openexr \
+        poppler \
+        gdal \
+        geos \
+        json-c \
+        libgcc \
+        libpq \
+        libstdc++ \
+        libxml2 \
+        musl \
+        pcre \
+        perl \
+        proj \
+        protobuf-c
 
 # hadolint ignore=DL3018, DL3003
 RUN --mount=type=cache,id=apk-${TARGETARCH}-${TARGETVARIANT},sharing=locked,target=/var/cache/apk \
@@ -47,11 +46,11 @@ RUN --mount=type=cache,id=apk-${TARGETARCH}-${TARGETVARIANT},sharing=locked,targ
                 gcc \
                 make \
                 cmake \
-				build-base \
+                build-base \
                 libxml2-dev \
                 protobuf-c-dev \
-                clang19 \
-                llvm19 \
+                clang21 \
+                llvm21 \
     && apk add --virtual .community-build-deps \
                 geos-dev \
                 proj-dev \
@@ -63,7 +62,7 @@ RUN --mount=type=cache,id=apk-${TARGETARCH}-${TARGETVARIANT},sharing=locked,targ
     && make && make install \
     && cd ~ \
     && apk del .fetch-deps .build-deps .community-build-deps \
-    && rm -rf /build 
+    && rm -rf /build
 
 # Labels
 LABEL \

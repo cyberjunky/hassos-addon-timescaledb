@@ -1,4 +1,4 @@
-FROM timescale/timescaledb:latest-pg17 AS timescale-pg17
+FROM timescale/timescaledb:2.29.2-pg17 AS timescale-pg17
 
 FROM timescale-pg17 AS pgvector
 ARG VERSION
@@ -19,27 +19,25 @@ RUN --mount=type=cache,id=apk-${TARGETARCH}-${TARGETVARIANT},sharing=locked,targ
                 openssl-dev \
                 tar \
                 wget \
-    && mkdir -p /build/ \
     && apk add --virtual .build-deps \
                 coreutils \
                 gcc \
                 make \
                 cmake \
-				build-base \
+                build-base \
                 libxml2-dev \
                 protobuf-c-dev \
-                clang19 \
-                llvm19 \
+                clang21 \
+                llvm21 \
     && mkdir -p /build \
-        && cd /build \
-        && git clone --branch v${VERSION} https://github.com/pgvector/pgvector.git \
-        && cd pgvector \
-        && make \
-        && make install \
+    && cd /build \
+    && git clone --branch v${VERSION} https://github.com/pgvector/pgvector.git \
+    && cd pgvector \
+    && make \
+    && make install \
     && cd ~ \
     && apk del .fetch-deps .build-deps \
-    && rm -rf /build 
-
+    && rm -rf /build
 
 # Labels
 LABEL \

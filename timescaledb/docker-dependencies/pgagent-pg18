@@ -1,4 +1,4 @@
-FROM timescale/timescaledb:2.29.2-pg17
+FROM timescale/timescaledb:2.29.2-pg18
 ARG VERSION
 ARG TARGETARCH
 ARG TARGETVARIANT

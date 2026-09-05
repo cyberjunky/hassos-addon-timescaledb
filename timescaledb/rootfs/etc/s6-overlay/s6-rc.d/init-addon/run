@@ -24,12 +24,15 @@ applyPermissions () {
 }
 
 # Initializes the data directory
+# $1: (optional) extra arguments for initdb
 initializeDataDirectory () {
+	local INITDB_ARGS=${1:-}
+
 	# Init data-directory
     bashio::log.info "Initializing new postgres directory.."
 	mkdir -p ${POSTGRES_DATA}
 	applyPermissions
-	su - postgres -c "initdb -D ${POSTGRES_DATA}"
+	su - postgres -c "initdb ${INITDB_ARGS} -D ${POSTGRES_DATA}"
 	# Set timescaledb and pg_stat_statements as being enabled in the postgres config file.
 	sed -r -i "s/[#]*\s*(shared_preload_libraries)\s*=\s*'(.*)'/\1 = 'timescaledb,pg_stat_statements,\2'/;s/,'''/'/;s/,'/'/" ${POSTGRES_DATA}/postgresql.conf
 	
@@ -141,8 +144,20 @@ upgradePostgreSQL() {
 	rm ${POSTGRES_DATA}${FROM_VERSION}/pg_hba.conf
 	mv ${POSTGRES_DATA}${FROM_VERSION}/pg_hba_backup.conf ${POSTGRES_DATA}${FROM_VERSION}/pg_hba.conf
 
+	# pg_upgrade requires the old and new cluster to agree on data checksums.
+	# Since PostgreSQL 18, initdb enables checksums by default, while older clusters
+	# were created without them. Match the setting of the old cluster.
+	local INITDB_ARGS=""
+	if /usr/libexec/postgresql${FROM_VERSION}/pg_controldata ${POSTGRES_DATA}${FROM_VERSION} | grep -qE "^Data page checksum version:\s+0$"; then
+		bashio::log.info "Old cluster has no data checksums, creating new cluster without checksums.."
+		INITDB_ARGS="--no-data-checksums"
+	else
+		bashio::log.info "Old cluster has data checksums, creating new cluster with checksums.."
+		INITDB_ARGS="--data-checksums"
+	fi
+
 	# Create a fresh data-directory
-	initializeDataDirectory
+	initializeDataDirectory "${INITDB_ARGS}"
 
 	# And upgrade!
 	bashio::log.notice "Upgrading databases.."
@@ -229,44 +244,29 @@ else
 
 	# Check if we need to restore again.
 	if $(bashio::config.true 'retry_upgrade'); then
-		if bashio::fs.directory_exists "${POSTGRES_DATA}14"; then
-			bashio::log.notice "An aborted upgrade from Postgres 14 was detected. Restoring.."
+		if bashio::fs.directory_exists "${POSTGRES_DATA}17"; then
+			bashio::log.notice "An aborted upgrade from Postgres 17 was detected. Restoring.."
 			rm -r ${POSTGRES_DATA}
-			mv ${POSTGRES_DATA}14 ${POSTGRES_DATA}
+			mv ${POSTGRES_DATA}17 ${POSTGRES_DATA}
 		else
 			bashio::config.suggest.false 'retry_upgrade' 'This option is only for temporary reasons: to recover from a failed upgrade.'
 		fi
 	fi
 
-	# Check if we need to upgrade from 12 to 15
-	if [[ $(< ${POSTGRES_DATA}/PG_VERSION) == "12" ]]; then
-		bashio::log.notice "A database upgrade is required from Postgres 12."
-		bashio::log.error "Upgrade was not succesfull. This addon version does no longer support Postgres 12. Please upgrade to the previous version of the addon and upgrade to Postgres 14 first." 
+	# Postgres versions older than 17 can no longer be upgraded by this addon version.
+	CURRENT_PG_VERSION=$(< ${POSTGRES_DATA}/PG_VERSION)
+	if [[ "${CURRENT_PG_VERSION}" =~ ^(12|13|14|15|16)$ ]]; then
+		bashio::log.notice "A database upgrade is required from Postgres ${CURRENT_PG_VERSION}."
+		bashio::log.error "Upgrade was not succesfull. This addon version does no longer support Postgres ${CURRENT_PG_VERSION}."
+		bashio::log.error "Please install add-on version 5.4.2 first to upgrade to Postgres 17, or restore a Home Assistant backup"
+		bashio::log.error "that contains a SQL dump (backup_db.sql) into a fresh installation of this add-on."
 		exit 1
 	fi
 
-	# Check if we need to upgrade from 14 to 15
-	if [[ $(< ${POSTGRES_DATA}/PG_VERSION) == "14" ]]; then
-		bashio::log.notice "A database upgrade is required from Postgres 14."
-		bashio::log.error "Upgrade was not succesfull. This addon version does no longer support Postgres 14. Please upgrade to the previous version of the addon and upgrade to Postgres 15 first." 
-		exit 1
-	fi
-
-	# Check if we need to upgrade from 15 to 17
-	if [[ $(< ${POSTGRES_DATA}/PG_VERSION) == "15" ]]; then
-		bashio::log.notice "A database upgrade is required from Postgres 15 -> 17"
-		if upgradePostgreSQL 15 17; then
-			bashio::log.notice "Upgrade was succesful"
-		else
-			bashio::log.error "Upgrade was not succesful."
-			exit 1
-		fi
-	fi
-
-	# Check if we need to upgrade from 16 to 17
-	if [[ $(< ${POSTGRES_DATA}/PG_VERSION) == "16" ]]; then
-		bashio::log.notice "A database upgrade is required from Postgres 16 -> 17"
-		if upgradePostgreSQL 16 17; then
+	# Check if we need to upgrade from 17 to 18
+	if [[ "${CURRENT_PG_VERSION}" == "17" ]]; then
+		bashio::log.notice "A database upgrade is required from Postgres 17 -> 18"
+		if upgradePostgreSQL 17 18; then
 			bashio::log.notice "Upgrade was succesful"
 		else
 			bashio::log.error "Upgrade was not succesful."
@@ -310,10 +310,10 @@ if bashio::config.has_value 'max_connections'; then
 	bashio::log.info "done"
 fi
 
-# Apply user-provided PostgreSQL configuration overrides
-if bashio::config.has_value 'postgresql_config' || bashio::config.has_value 'pg_hba_config'; then
-	bashio::log.info "Applying user configuration overrides.."
-	chmod 707 "/usr/share/timescaledb/003_apply_user_config.sh"
-	/usr/share/timescaledb/003_apply_user_config.sh
-	bashio::log.info "done"
-fi
+# Apply user-provided PostgreSQL configuration overrides.
+# Always invoked: even when both override blocks are empty it still cleans up any
+# previously written user-defined pg_hba.conf rules, so a cleared config is honored.
+bashio::log.info "Applying user configuration overrides.."
+chmod 707 "/usr/share/timescaledb/003_apply_user_config.sh"
+/usr/share/timescaledb/003_apply_user_config.sh
+bashio::log.info "done"

@@ -1,14 +1,13 @@
-FROM timescale/timescaledb:latest-pg16
+FROM timescale/timescaledb:2.29.2-pg18 AS timescale-pg18
+
+FROM timescale-pg18 AS pgvector
 ARG VERSION
 ARG TARGETARCH
 ARG TARGETVARIANT
 
 # --------------------------------------------
-# pgAgent - build pached version and install
+# pgVector - build and install
 # --------------------------------------------
-RUN mkdir -p /build
-COPY timescaledb/pgagent.patch /build/
-
 # hadolint ignore=DL3018, DL3003
 RUN --mount=type=cache,id=apk-${TARGETARCH}-${TARGETVARIANT},sharing=locked,target=/var/cache/apk \
     set -ex \
@@ -19,27 +18,26 @@ RUN --mount=type=cache,id=apk-${TARGETARCH}-${TARGETVARIANT},sharing=locked,targ
                 openssl \
                 openssl-dev \
                 tar \
-        && apk add -u musl \
+                wget \
     && apk add --virtual .build-deps \
                 coreutils \
                 gcc \
                 make \
                 cmake \
-				build-base \
-				boost-dev \
-				openldap-dev \
-&& git clone https://github.com/postgres/pgagent /build/pgagent \
-    && cd /build/pgagent \
-    && git checkout ${VERSION} \
-&& git apply -v ../pgagent.patch \
-    && cmake . \
-    && make && make install \
+                build-base \
+                libxml2-dev \
+                protobuf-c-dev \
+                clang21 \
+                llvm21 \
+    && mkdir -p /build \
+    && cd /build \
+    && git clone --branch v${VERSION} https://github.com/pgvector/pgvector.git \
+    && cd pgvector \
+    && make \
+    && make install \
     && cd ~ \
     && apk del .fetch-deps .build-deps \
-    && rm -rf /build \
-	&& apk add \
-				boost-libs
-
+    && rm -rf /build
 
 # Labels
 LABEL \

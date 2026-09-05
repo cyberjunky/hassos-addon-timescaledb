@@ -1,4 +1,4 @@
-FROM timescale/timescaledb:latest-pg16
+FROM timescale/timescaledb:2.29.2-pg18
 ARG VERSION
 ARG TARGETARCH
 ARG TARGETVARIANT
@@ -14,20 +14,20 @@ RUN --mount=type=cache,id=apk-${TARGETARCH}-${TARGETVARIANT},sharing=locked,targ
                 openssl \
                 openssl-dev \
                 tar \
-        && apk add -u musl \
+    && apk add -u musl \
     && apk add --virtual .build-deps \
                 coreutils \
                 gcc \
                 make \
                 cmake \
-				build-base \
-				boost-dev \
-				openldap-dev \
-                clang19 \
-                llvm19 \
+                build-base \
+                boost-dev \
+                openldap-dev \
+                clang21 \
+                llvm21 \
     && git clone https://github.com/EnterpriseDB/system_stats.git /build/system-stats \
-        && cd /build/system-stats \
-        && git checkout v${VERSION}
+    && cd /build/system-stats \
+    && git checkout v${VERSION}
 
 WORKDIR /build/system-stats
 
@@ -36,7 +36,7 @@ RUN --mount=type=cache,id=apk-${TARGETARCH}-${TARGETVARIANT},sharing=locked,targ
     && PATH=/usr/local/pgsql/bin:$PATH make USE_PGXS=1 \
     && PATH=/usr/local/pgsql/bin:$PATH make install USE_PGXS=1 \
     && apk del .fetch-deps .build-deps \
-        && rm -rf /build
+    && rm -rf /build
 
 # Labels
 LABEL \

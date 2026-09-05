@@ -1,9 +1,12 @@
-FROM timescale/timescaledb:latest-pg17 AS timescale-pg17
+FROM timescale/timescaledb:2.29.2-pg17 AS timescale-pg17
 
 FROM timescale-pg17 AS timescaledb-toolkit
 ARG VERSION
 ARG TARGETARCH
 ARG TARGETVARIANT
+
+# The cargo-pgrx version must match the pgrx version pinned in the toolkit's extension/Cargo.toml
+ARG PGRX_VERSION=0.18.1
 
 # hadolint ignore=DL3018, SC3014
 RUN --mount=type=cache,id=apk-${TARGETARCH}-${TARGETVARIANT},sharing=locked,target=/var/cache/apk \
@@ -29,20 +32,21 @@ RUN --mount=type=cache,id=apk-${TARGETARCH}-${TARGETVARIANT},sharing=locked,targ
             && curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --default-toolchain stable \
             && export PATH="/root/.cargo/bin:${PATH}" \
             && export OPENSSL_DIR=/usr \
-            && cargo install --version '=0.16.1' --locked --force cargo-pgrx \
-            && cargo install --force rustfmt; \
+            && rustup component add rustfmt \
+            && cargo install --version "=${PGRX_VERSION}" --locked --force cargo-pgrx; \
        fi
 
-# Add compatibility libraries for timescaledb toolkit
+# Add compatibility libraries for timescaledb toolkit (libclang is needed by bindgen)
 # hadolint ignore=DL3018, SC3014
 RUN --mount=type=cache,id=apk-${TARGETARCH}-${TARGETVARIANT},sharing=locked,target=/var/cache/apk \
     set -ex \
     && apk update \
     && if [ "$TARGETARCH" == "amd64" ] || [ "$TARGETARCH" == "arm64" ]; then \
-        apk add gcompat clang16-libclang clang15-libclang; \
+        apk add gcompat clang21-libclang; \
     fi
 
 ENV RUST_MIN_STACK=4194304
+ENV LIBCLANG_PATH=/usr/lib/llvm21/lib
 # hadolint ignore=DL3003, SC3014
 RUN --mount=type=cache,id=pgrx-${TARGETARCH}-${TARGETVARIANT},sharing=locked,target=/root/.pgrx \
     --mount=type=cache,id=cargo-${TARGETARCH}-${TARGETVARIANT},sharing=locked,target=/root/.cargo \
@@ -56,7 +60,6 @@ RUN --mount=type=cache,id=pgrx-${TARGETARCH}-${TARGETVARIANT},sharing=locked,tar
             && git checkout ${VERSION} \
             && cd extension \
             # initdb fails as root so generate the correct config ourselves
-            # && cargo pgx init --pg17 /usr/lib/postgresql/17/bin/pg_config
             && mkdir -p /root/.pgrx \
             && printf '[configs]\npg17="/usr/local/bin/pg_config"\n' > /root/.pgrx/config.toml \
             && cargo pgrx install --release \

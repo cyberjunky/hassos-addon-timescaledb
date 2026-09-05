@@ -6,7 +6,7 @@
 
 # Home Assistant Add-on: [PostgreSQL](https://www.postgresql.org/) [TimescaleDB](https://www.timescale.com/)
 
-## [PostgreSql 17.6](https://www.postgresql.org/) & [Postgis 3.6.0](https://postgis.net/) & [TimescaleDB 2.22.1](https://www.timescale.com/) & [TimescaleDB Toolkit 1.21.0](https://github.com/timescale/timescaledb-toolkit) & [pgAgent 4.2.3](https://www.pgadmin.org/docs/pgadmin4/development/pgagent.html)
+## [PostgreSql 18.6](https://www.postgresql.org/) & [Postgis 3.6.4](https://postgis.net/) & [TimescaleDB 2.29.2](https://www.timescale.com/) & [TimescaleDB Toolkit 1.26.0](https://github.com/timescale/timescaledb-toolkit) & [pgVector 0.8.6](https://github.com/pgvector/pgvector) & [pgAgent 4.2.3](https://www.pgadmin.org/docs/pgadmin4/development/pgagent.html)
 
 #### Configuation
 
@@ -89,8 +89,12 @@ Example: ['sed -i -e "/max_connections =/ s/= .*/= 50/" /data/postgres/postgresq
 #### Option: `retry_upgrade`
 
 Advanced users only!
-When set, the upgrade from Postgres 14 to 15 could be retryed if it failed mid-flight.
-Basically this will try to find the old database-files from Postgres 12, and restore them before trying to upgrade to Postgres 14 again.
+When set, the upgrade from Postgres 17 to 18 could be retried if it failed mid-flight.
+Basically this will try to find the old database-files from Postgres 17, and restore them before trying to upgrade to Postgres 18 again.
+
+Note: this add-on version can only upgrade databases from Postgres 17. If you are still running an older Postgres version
+(add-on version 5.1 or older), install add-on version 5.4.2 first to upgrade to Postgres 17, or restore a Home Assistant
+backup containing a SQL dump into a fresh installation of this add-on.
 
 !! Please don't set this if you don't know what you are doing or before taking a backup. !!
 
@@ -347,4 +351,4 @@ If you are more interested in stable releases, use the stable repository:
 [release-shield]: https://img.shields.io/badge/version-{{ version }}-blue.svg
 [release]: {{ repo }}/tree/{{ version }}
 [license-shield]: https://img.shields.io/github/license/expaso/hassos-addon-{{ name }}.svg
-[maintenance-shield]: https://img.shields.io/maintenance/yes/2025.svg
+[maintenance-shield]: https://img.shields.io/maintenance/yes/2026.svg
